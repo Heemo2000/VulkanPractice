@@ -1,0 +1,15 @@
+[submodule "engine/external/glfw"]
+	path = engine/external/glfw
+	url = https://github.com/glfw/glfw.git
+[submodule "engine/external/glm"]
+	path = engine/external/glm
+	url = https://github.com/g-truc/glm.git
+[submodule "engine/external/spdlog"]
+	path = engine/external/spdlog
+	url = https://github.com/gabime/spdlog.git
+[submodule "engine/external/taskflow"]
+	path = engine/external/taskflow
+	url = https://github.com/taskflow/taskflow.git
+[submodule "engine/external/lightweightvk"]
+	path = engine/external/lightweightvk
+	url = https://github.com/corporateshark/lightweightvk.git
