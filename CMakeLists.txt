@@ -1,20 +1,20 @@
 cmake_minimum_required(VERSION 3.24)
 project(VulkanPractice LANGUAGES CXX)
-
-
 find_package(Vulkan REQUIRED)
 
 
 add_executable(vulkanPractice
                "src/main.cpp"
                "src/SimpleTriangle.h"
-               "src/SimpleTriangle.cpp")
+               "src/SimpleTriangle.cpp"
+               "src/vmaUsage.cpp"
+               "src/volkUsage.cpp")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_subdirectory(third-parties/glm)
-add_subdirectory(third-parties/SDL)
+add_subdirectory(third-parties/SDL EXCLUDE_FROM_ALL)
 add_subdirectory(third-parties/volk-1.4.350)
 add_subdirectory(third-parties/VulkanMemoryAllocator-3.4.0)
 
@@ -30,6 +30,7 @@ set_target_properties(slang PROPERTIES
 
 target_link_libraries(vulkanPractice PRIVATE
                       Vulkan::Vulkan
+                      SDL3::SDL3
                       glm::glm
                       volk::volk
                       slang
@@ -46,6 +47,11 @@ add_custom_command(TARGET vulkanPractice POST_BUILD
                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
                    "${SLANG_ROOT}/bin/slang.dll"
                    "${SLANG_ROOT}/bin/slang-compiler.dll"
+                   "$<TARGET_FILE_DIR:vulkanPractice>"
+
+                   COMMAND ${CMAKE_COMMAND} -E echo "Copying SDL3.dll"
+                   COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                   "$<TARGET_FILE:SDL3::SDL3>"
                    "$<TARGET_FILE_DIR:vulkanPractice>"
                    )
 
