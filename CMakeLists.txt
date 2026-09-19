@@ -13,6 +13,10 @@ add_executable(vulkanPractice
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if(MSVC)
+    target_compile_options(vulkanPractice PRIVATE /std:c++20)
+endif()
+
 add_subdirectory(third-parties/glm)
 add_subdirectory(third-parties/SDL EXCLUDE_FROM_ALL)
 add_subdirectory(third-parties/volk-1.4.350)
