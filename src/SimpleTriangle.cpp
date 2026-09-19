@@ -37,12 +37,13 @@ bool SimpleTriangle::Initialize()
 
 	std::cout << "GPU we are using: " << deviceProp.deviceName << std::endl;
 
-
 	if (!FindGraphicsQueueIndex())
 	{
 		ShowError("Failed to get graphics queue index!!");
 		return false;
 	}
+
+	std::cout << "Graphics Queue Index: " << m_GraphicsQueueIndex << std::endl;
 
 	return true;
 }
@@ -97,12 +98,14 @@ void SimpleTriangle::Render()
 
 bool SimpleTriangle::CreateWindow()
 {
+	//First, we initialize SDL with video support.
 	if (!SDL_Init(SDL_INIT_VIDEO))
 	{
 		ShowError("Failed to initialize SDL!!");
 		return false;
 	}
 
+	//Then, create a window with Vulkan support.
 	m_Window = SDL_CreateWindow("Simple Triangle", m_Width, m_Height, SDL_WINDOW_RESIZABLE | SDL_WINDOW_VULKAN);
 	if (m_Window == nullptr)
 	{
@@ -131,6 +134,9 @@ bool SimpleTriangle::CreateInstance()
 		.apiVersion = VulkanVersion
 	};
 
+	//This is Debug Messenger Create Info, this is helpful in setting up a debugger which
+	//we can use for checking various types of warnings and errors.
+
 	const VkDebugUtilsMessengerCreateInfoEXT debugMessengerCreateInfo
 	{
 		.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
@@ -147,12 +153,36 @@ bool SimpleTriangle::CreateInstance()
 		.pUserData = this
 	};
 
+
+	//First, grab instance extensions from SDL, which are actually features that 
+	//extend the global functionality of Vulkan API.
+	//Because Vulkan is entirely platform-agnostic, the
+	//core API doesn't know how to talk to your OS's window manager
+	//or how to output debug messages
+	//Instance extensions bridge this gap.
+
 	uint32_t instanceExtensionsCount = 0;
 	const char* const* instanceExtensions = SDL_Vulkan_GetInstanceExtensions(&instanceExtensionsCount);
 
+	std::cout << "Instance Extensions: " << std::endl;
+
+	for (int i = 0; i < instanceExtensionsCount; i++)
+	{
+		std::cout << instanceExtensions[i] << std::endl;
+	}
+
+	std::cout << std::endl;
 	std::vector<const char*> extensions(instanceExtensions, instanceExtensions + instanceExtensionsCount);
+	
+	//As I have talked before, Vulkan is platform-agnostic, it doesn't know about how to output messages.
+	//So, we will push one identifier, called VK_EXT_DEBUG_UTILS_EXTENSION_NAME.
 	extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 
+	//Now, we will request some layers, in which we request validation layers.
+	//Validation layers are responsible for checking the warnings and errors.
+
+	//Note that, validation layers and debug messenger are different.
+	//Vulkan keeps them separate for modularity, performance and flexibility.
 	std::vector<const char*> requestedLayers
 	{
 		"VK_LAYER_KHRONOS_validation"
@@ -177,6 +207,8 @@ bool SimpleTriangle::CreateInstance()
 		return false;
 	}
 
+	//This call loads all required global and instance-level functions for Vulkan instance.
+	//If we don't call this, then any subsequent call to Vulkan would result in failure.
 	volkLoadInstance(m_Instance);
 
 	return true;
@@ -237,16 +269,18 @@ VkPhysicalDevice SimpleTriangle::FindPhysicalDevice()
 bool SimpleTriangle::FindGraphicsQueueIndex()
 {
 	uint32_t queueFamilyPropertyCount = 0;
-	vkGetPhysicalDeviceQueueFamilyProperties(m_PhysicalDevice, &queueFamilyPropertyCount, VK_NULL_HANDLE);
+	vkGetPhysicalDeviceQueueFamilyProperties2(m_PhysicalDevice, &queueFamilyPropertyCount, VK_NULL_HANDLE);
 	
-	std::vector<VkQueueFamilyProperties> queueFamilyProperties(queueFamilyPropertyCount);
+	std::vector<VkQueueFamilyProperties2> queueFamilyProperties(queueFamilyPropertyCount, {VK_STRUCTURE_TYPE_QUEUE_FAMILY_PROPERTIES_2});
 
-	vkGetPhysicalDeviceQueueFamilyProperties(m_PhysicalDevice, &queueFamilyPropertyCount, queueFamilyProperties.data());
+	vkGetPhysicalDeviceQueueFamilyProperties2(m_PhysicalDevice, &queueFamilyPropertyCount, queueFamilyProperties.data());
 
 	int index = 0;
-	for (const VkQueueFamilyProperties& prop : queueFamilyProperties)
+	for (const VkQueueFamilyProperties2& prop : queueFamilyProperties)
 	{
-		if ((prop.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0)
+		VkBool32 hasPresentationSupport = VK_FALSE;
+		vkGetPhysicalDeviceSurfaceSupportKHR(m_PhysicalDevice, index, m_Surface, &hasPresentationSupport);
+		if (hasPresentationSupport && (prop.queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0)
 		{
 			m_GraphicsQueueIndex = index;
 			return true;
@@ -257,4 +291,97 @@ bool SimpleTriangle::FindGraphicsQueueIndex()
 
 	m_GraphicsQueueIndex = -1;
 	return false;
+}
+
+bool SimpleTriangle::CreateLogicalDevice(VkPhysicalDevice physicalDevice)
+{
+	//Here, we will ask for what features will the current GPU can support.
+
+	VkPhysicalDeviceVulkan14Features vk14Features
+	{
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES,
+		.pNext = nullptr
+	};
+
+	VkPhysicalDeviceVulkan13Features vk13Features
+	{
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+		.pNext = &vk14Features
+	};
+
+	VkPhysicalDeviceVulkan12Features vk12Features
+	{
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+		.pNext = &vk13Features
+	};
+
+	VkPhysicalDeviceFeatures2 vk11Features
+	{
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+		.pNext = &vk12Features
+	};
+
+	vkGetPhysicalDeviceFeatures2(m_PhysicalDevice, &vk11Features);
+
+	if (!vk13Features.dynamicRendering || !vk13Features.synchronization2 || !vk12Features.timelineSemaphore)
+	{
+		if (!vk13Features.dynamicRendering)
+		{
+			ShowError("Your GPU doesn't support dynamic rendering");
+		}
+
+		if (!vk13Features.synchronization2)
+		{
+			ShowError("Your GPU doesn't support Synchronization2");
+		}
+
+		if (!vk12Features.timelineSemaphore)
+		{
+			ShowError("Your GPU doesn't support Timeline Semaphores");
+		}
+
+		return false;
+	}
+
+	//Here, we will ask for what features will the current GPU will support for the application.
+	//Remember, request only needed features, not more than that, otherwise, your GPU may explode. Who knows ?
+	VkPhysicalDeviceVulkan14Features vk14FeaturesToSupport
+	{
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES,
+		.pNext = nullptr
+	};
+
+	VkPhysicalDeviceVulkan13Features vk13FeaturesToSupport
+	{
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+		.pNext = &vk14FeaturesToSupport,
+		.synchronization2 = VK_TRUE,
+		.dynamicRendering = VK_TRUE
+	};
+
+	VkPhysicalDeviceVulkan12Features vk12FeaturesToSupport
+	{
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+		.pNext = &vk13FeaturesToSupport,
+		.timelineSemaphore = VK_TRUE
+	};
+
+	VkPhysicalDeviceFeatures2 vk11FeaturesToSupport
+	{
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+		.pNext = &vk12FeaturesToSupport
+	};
+
+	std::vector<float> queuePriorities{ 1.0f };
+	VkDeviceQueueCreateInfo graphicsQueueInfo
+	{
+		.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+		.queueFamilyIndex = m_GraphicsQueueIndex,
+		.queueCount = static_cast<uint32_t>(queuePriorities.size()),
+		.pQueuePriorities = queuePriorities.data()
+	};
+
+
+
+	return true;
 }

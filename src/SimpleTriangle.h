@@ -36,6 +36,7 @@ private:
 	bool CreateSurface();
 	VkPhysicalDevice FindPhysicalDevice();
 	bool FindGraphicsQueueIndex();
+	bool CreateLogicalDevice(VkPhysicalDevice physicalDevice);
 private:
 	uint32_t m_Width;
 	uint32_t m_Height;
