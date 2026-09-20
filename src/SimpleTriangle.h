@@ -1,15 +1,16 @@
 #define VK_NO_PROTOTYPES
 #include <SDL3/SDL_vulkan.h>
 
-#include <Volk/volk.h>
+#include <volk.h>
+#include <vk_mem_alloc.h>
 
-#include <vma/vk_mem_alloc.h>
 #include<string>
 #include<vector>
 
 class SimpleTriangle
 {
 	constexpr static uint32_t VulkanVersion = VK_API_VERSION_1_4;
+	constexpr static VkFormat ExpectedSwapchainFormat = VK_FORMAT_B8G8R8A8_SRGB;
 public:
 	SimpleTriangle() = delete;
 	SimpleTriangle(const SimpleTriangle& instance) = delete;
@@ -37,6 +38,8 @@ private:
 	VkPhysicalDevice FindPhysicalDevice();
 	bool FindGraphicsQueueIndex();
 	bool CreateLogicalDevice(VkPhysicalDevice physicalDevice);
+	bool InitializeVMA();
+	bool CreateSwapchain(uint32_t width, uint32_t height);
 private:
 	uint32_t m_Width;
 	uint32_t m_Height;
@@ -48,4 +51,16 @@ private:
 	VkSurfaceKHR m_Surface = VK_NULL_HANDLE;
 	VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE;
 	uint32_t m_GraphicsQueueIndex = -1;
+	VkDevice m_LogicalDevice = VK_NULL_HANDLE;
+	VkQueue m_GraphicsQueue = VK_NULL_HANDLE;
+	VmaAllocator m_Allocator = nullptr;
+	
+	VkSwapchainKHR m_Swapchain = VK_NULL_HANDLE;
+	std::vector<VkImage> m_SwapchainImages;
+	std::vector<VkImageView> m_SwapchainImageViews;
+	std::vector<VkSemaphore> m_RenderCompleteSemaphores;
+	bool m_RequireSwapchainRecreate = false;
+	uint32_t m_SwapchainWidth = 0;
+	uint32_t m_SwapchainHeight = 0;
+	VkFormat m_RequiredSwapchainFormat = VK_FORMAT_UNDEFINED;
 };

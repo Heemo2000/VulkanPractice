@@ -1,6 +1,7 @@
 #include "SimpleTriangle.h"
 #include <SDL3/SDL.h>
 #include <iostream>
+#include <format>
 
 SimpleTriangle::SimpleTriangle(uint32_t width, uint32_t height) : m_Width(width), m_Height(height)
 {
@@ -45,6 +46,24 @@ bool SimpleTriangle::Initialize()
 
 	std::cout << "Graphics Queue Index: " << m_GraphicsQueueIndex << std::endl;
 
+	if (!CreateLogicalDevice(m_PhysicalDevice))
+	{
+		ShowError("Couldn't create a logical device for selected GPU!!");
+		return false;
+	}
+
+	if (!InitializeVMA())
+	{
+		ShowError("Failed to initialize VMA!!");
+		return false;
+	}
+
+	if (!CreateSwapchain(m_Width, m_Height))
+	{
+		ShowError("Couldn't create a swapchain!!");
+		return false;
+	}
+
 	return true;
 }
 
@@ -75,6 +94,29 @@ void SimpleTriangle::Run()
 
 void SimpleTriangle::Shutdown()
 {
+	vkDeviceWaitIdle(m_LogicalDevice);
+
+	if (m_Allocator != nullptr)
+	{
+		vmaDestroyAllocator(m_Allocator);
+	}
+
+	if (m_LogicalDevice != VK_NULL_HANDLE)
+	{
+		vkDestroyDevice(m_LogicalDevice, nullptr);
+	}
+
+	if (m_Surface != VK_NULL_HANDLE)
+	{
+		vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
+	}
+
+	if (m_Instance != VK_NULL_HANDLE)
+	{
+		vkDestroyInstance(m_Instance, nullptr);
+	}
+
+	volkFinalize();
 }
 
 VkBool32 SimpleTriangle::DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData)
@@ -263,6 +305,30 @@ VkPhysicalDevice SimpleTriangle::FindPhysicalDevice()
 		}
 	}
 
+
+	//Search for compatible surface format.
+	uint32_t surfaceFormatsCount = 0;
+	vkGetPhysicalDeviceSurfaceFormatsKHR(finalDeviceToUse, m_Surface, &surfaceFormatsCount, VK_NULL_HANDLE);
+
+	std::vector<VkSurfaceFormatKHR> surfaceFormats(surfaceFormatsCount);
+	vkGetPhysicalDeviceSurfaceFormatsKHR(finalDeviceToUse, m_Surface, &surfaceFormatsCount, surfaceFormats.data());
+	
+	//If we get the expected swapchain format, then it's good,
+	//otherwise, we will just set required swapchain format to the first one supported format.
+	for (const VkSurfaceFormatKHR& surfaceFormat : surfaceFormats)
+	{
+		if (surfaceFormat.format == ExpectedSwapchainFormat)
+		{
+			m_RequiredSwapchainFormat = ExpectedSwapchainFormat;
+			break;
+		}
+	}
+
+	if (m_RequiredSwapchainFormat == VK_FORMAT_UNDEFINED)
+	{
+		m_RequiredSwapchainFormat = surfaceFormats[0].format;
+	}
+
 	return finalDeviceToUse;
 }
 
@@ -372,14 +438,168 @@ bool SimpleTriangle::CreateLogicalDevice(VkPhysicalDevice physicalDevice)
 		.pNext = &vk12FeaturesToSupport
 	};
 
+	//Request the queues we will be using.
 	std::vector<float> queuePriorities{ 1.0f };
 	VkDeviceQueueCreateInfo graphicsQueueInfo
 	{
 		.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
 		.queueFamilyIndex = m_GraphicsQueueIndex,
-		.queueCount = static_cast<uint32_t>(queuePriorities.size()),
+		.queueCount = 1,
 		.pQueuePriorities = queuePriorities.data()
 	};
+
+	//Get the device extensions.
+	std::vector<const char*> deviceExtensions{ VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+
+	//Now, we will create logical device based on create info.
+	const VkDeviceCreateInfo deviceCreateInfo
+	{
+		.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+		.pNext = &vk11FeaturesToSupport, //We have set 'features to support' here, since the type is VkPhysicalDeviceFeatures2 and also we provide a chain of features, 
+										 //not just a single feature to support.
+		.queueCreateInfoCount = 1,
+		.pQueueCreateInfos = &graphicsQueueInfo,
+		.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size()),
+		.ppEnabledExtensionNames = deviceExtensions.data(),
+		.pEnabledFeatures = nullptr
+	};
+
+
+	if (vkCreateDevice(m_PhysicalDevice, &deviceCreateInfo, nullptr, &m_LogicalDevice) != VK_SUCCESS)
+	{
+		return false;
+	}
+
+	vkGetDeviceQueue(m_LogicalDevice, m_GraphicsQueueIndex, 0, &m_GraphicsQueue);
+
+	if (m_GraphicsQueue == VK_NULL_HANDLE)
+	{
+		ShowError("Couldn't get the graphics queue");
+		return false;
+	}
+
+	return true;
+}
+
+bool SimpleTriangle::InitializeVMA()
+{
+	VmaVulkanFunctions funcInfo{};
+
+	const VmaAllocatorCreateInfo allocatorCreateInfo
+	{
+		.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT, // It simply means that we can access VRAM directly via pointers.
+		.physicalDevice = m_PhysicalDevice,
+		.device = m_LogicalDevice,
+		.pVulkanFunctions = &funcInfo,
+		.instance = m_Instance,
+		.vulkanApiVersion = VulkanVersion
+	};
+
+	vmaImportVulkanFunctionsFromVolk(&allocatorCreateInfo, &funcInfo);
+	
+	if (vmaCreateAllocator(&allocatorCreateInfo, &m_Allocator) != VK_SUCCESS)
+	{
+		ShowError("Could not create VMA allocator!!");
+		return false;
+	}
+	return true;
+}
+
+bool SimpleTriangle::CreateSwapchain(uint32_t width, uint32_t height)
+{
+	m_SwapchainWidth = width;
+	m_SwapchainHeight = height;
+
+	//We request the number of images using surface capabilities.
+	VkSurfaceCapabilitiesKHR surfaceCaps{};
+	if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_PhysicalDevice, m_Surface, &surfaceCaps) != VK_SUCCESS)
+	{
+		ShowError("Couldn't get surface capabilities");
+		return false;
+	}
+
+	uint32_t requestedImageCount = std::max(2u, surfaceCaps.minImageCount);
+	//If maxImageCount is 0, then we can ask for unlimited number of images.
+	//But if it's value is other than 0, then clamp to minimum of requestedImageCount and maxImageCount.
+	if (surfaceCaps.maxImageCount > 0)
+	{
+		requestedImageCount = std::min(requestedImageCount, surfaceCaps.maxImageCount);
+	}
+
+	//Now, create the swapchain.
+	VkSwapchainCreateInfoKHR swapchainCreateInfo
+	{
+		.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+		.surface = m_Surface,
+		.minImageCount = requestedImageCount,
+		.imageFormat = m_RequiredSwapchainFormat,
+		.imageColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR,
+		.imageExtent { .width = m_SwapchainWidth, .height = m_SwapchainHeight },
+		.imageArrayLayers = 1,
+		.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+		.preTransform = surfaceCaps.currentTransform,
+		.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+		.presentMode = VK_PRESENT_MODE_FIFO_KHR
+	};
+
+	if (vkCreateSwapchainKHR(m_LogicalDevice, &swapchainCreateInfo, nullptr, &m_Swapchain) != VK_SUCCESS)
+	{
+		return false;
+	}
+
+	//Now, create the swapchain images.
+	uint32_t imageCount = 0;
+	vkGetSwapchainImagesKHR(m_LogicalDevice, m_Swapchain, &imageCount, VK_NULL_HANDLE);
+
+	m_SwapchainImages.resize(imageCount);
+	vkGetSwapchainImagesKHR(m_LogicalDevice, m_Swapchain, &imageCount, m_SwapchainImages.data());
+
+	m_SwapchainImageViews.resize(imageCount);
+
+	//Now, get swapchain image views.
+
+	for (uint32_t i = 0; i < imageCount; i++)
+	{
+		VkImageViewCreateInfo imageViewCreateInfo
+		{
+			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+			.image = m_SwapchainImages[i],
+			.viewType = VK_IMAGE_VIEW_TYPE_2D,
+			.format = m_RequiredSwapchainFormat,
+			.subresourceRange
+			{
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.baseMipLevel = 0,
+				.levelCount = 1,
+				.baseArrayLayer = 0,
+				.layerCount = 1
+			}
+		};
+
+		if (vkCreateImageView(m_LogicalDevice, &imageViewCreateInfo, nullptr, &m_SwapchainImageViews[i]) != VK_SUCCESS)
+		{
+			ShowError(std::format("Not able to create image view {0}", i));
+			return false;
+		}
+	}
+
+	m_RenderCompleteSemaphores.resize(m_SwapchainImages.size());
+
+	int index = 0;
+	for (VkSemaphore& semaphore : m_RenderCompleteSemaphores)
+	{
+		VkSemaphoreCreateInfo semaphoreCreateInfo
+		{
+			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
+		};
+
+		if (vkCreateSemaphore(m_LogicalDevice, &semaphoreCreateInfo, nullptr, &semaphore) != VK_SUCCESS)
+		{
+			ShowError(std::format("Not able to create semaphore {0}", index));
+			return false;
+		}
+		index++;
+	}
 
 
 
