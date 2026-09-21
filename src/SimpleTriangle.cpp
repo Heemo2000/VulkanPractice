@@ -96,6 +96,8 @@ void SimpleTriangle::Shutdown()
 {
 	vkDeviceWaitIdle(m_LogicalDevice);
 
+	DestroySwapchain();
+
 	if (m_Allocator != nullptr)
 	{
 		vmaDestroyAllocator(m_Allocator);
@@ -136,6 +138,36 @@ void SimpleTriangle::ShowError(const std::string& errorMessage)
 void SimpleTriangle::Render()
 {
 
+}
+
+void SimpleTriangle::DestroySwapchain()
+{
+	for (size_t i = 0; i < m_SwapchainImageViews.size(); i++)
+	{
+		vkDestroyImageView(m_LogicalDevice, m_SwapchainImageViews[i], nullptr);
+	}
+
+	m_SwapchainImageViews.clear();
+
+	for (size_t i = 0; i < m_RenderCompleteSemaphores.size(); i++)
+	{
+		vkDestroySemaphore(m_LogicalDevice, m_RenderCompleteSemaphores[i], nullptr);
+	}
+
+
+	if (m_Swapchain != VK_NULL_HANDLE)
+	{
+		vkDestroySwapchainKHR(m_LogicalDevice, m_Swapchain, nullptr);
+		m_Swapchain = nullptr;
+	}
+
+
+	if (m_DepthImageView != VK_NULL_HANDLE)
+	{
+		vkDestroyImageView(m_LogicalDevice, m_DepthImageView, nullptr);
+		vmaDestroyImage(m_Allocator, m_DepthImage, m_DepthImageAllocation);
+		m_DepthImageView = nullptr;
+	}
 }
 
 bool SimpleTriangle::CreateWindow()
@@ -547,7 +579,7 @@ bool SimpleTriangle::CreateSwapchain(uint32_t width, uint32_t height)
 		return false;
 	}
 
-	//Now, create the swapchain images.
+	//Now, get the swapchain images.
 	uint32_t imageCount = 0;
 	vkGetSwapchainImagesKHR(m_LogicalDevice, m_Swapchain, &imageCount, VK_NULL_HANDLE);
 
@@ -556,7 +588,7 @@ bool SimpleTriangle::CreateSwapchain(uint32_t width, uint32_t height)
 
 	m_SwapchainImageViews.resize(imageCount);
 
-	//Now, get swapchain image views.
+	//Now, create swapchain image views.
 
 	for (uint32_t i = 0; i < imageCount; i++)
 	{
@@ -583,6 +615,7 @@ bool SimpleTriangle::CreateSwapchain(uint32_t width, uint32_t height)
 		}
 	}
 
+	//Now, create the render complete semaphores which are signals when the GPU has finished rendering and gives the presentation engine permission to show the image on the screen.
 	m_RenderCompleteSemaphores.resize(m_SwapchainImages.size());
 
 	int index = 0;
@@ -595,13 +628,56 @@ bool SimpleTriangle::CreateSwapchain(uint32_t width, uint32_t height)
 
 		if (vkCreateSemaphore(m_LogicalDevice, &semaphoreCreateInfo, nullptr, &semaphore) != VK_SUCCESS)
 		{
-			ShowError(std::format("Not able to create semaphore {0}", index));
+			ShowError(std::format("Not able to create render complete semaphore {0}", index));
 			return false;
 		}
 		index++;
 	}
 
 
+	//Now, we will create a depth/Z-buffer which will decide which object is near or far to the screen,
+	//and will discard pixels for the object when that object is behind another object.
+	VkImageCreateInfo depthImageCreateInfo
+	{
+		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		.imageType = VK_IMAGE_TYPE_2D,
+		.format = DepthFormat,
+		.extent { .width = m_SwapchainWidth, .height = m_SwapchainHeight, .depth = 1},
+		.mipLevels = 1,
+		.arrayLayers = 1,
+		.samples = VK_SAMPLE_COUNT_1_BIT,
+		.tiling = VK_IMAGE_TILING_OPTIMAL,//This tells Vulkan to choose tiling optimal for the image.
+		.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
+	};
+
+	VmaAllocationCreateInfo allocInfo
+	{
+		.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,//This tells VMA that we want memory dedicated specifically for the depth buffer and not the piece of larger allocation.
+		.usage = VMA_MEMORY_USAGE_AUTO //This tell VMA to select best memory type for the depth buffer automatically.
+	};
+
+	if (vmaCreateImage(m_Allocator, &depthImageCreateInfo, &allocInfo, &m_DepthImage, &m_DepthImageAllocation, nullptr) != VK_SUCCESS)
+	{
+		ShowError("Unable to create depth image!!");
+		return false;
+	}
+
+	//Here, just setting up depth buffer/image is not enough, we need to create image view for this.
+	VkImageViewCreateInfo depthImageViewCreateInfo
+	{
+		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+		.image = m_DepthImage,
+		.viewType = VK_IMAGE_VIEW_TYPE_2D,
+		.format = DepthFormat,
+		.subresourceRange { .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT, .levelCount = 1, .layerCount = 1 }
+	};
+
+	if (vkCreateImageView(m_LogicalDevice, &depthImageViewCreateInfo, nullptr, &m_DepthImageView) != VK_SUCCESS)
+	{
+		ShowError("Unable to create depth image view!!");
+		return false;
+	}
 
 	return true;
 }

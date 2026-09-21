@@ -11,6 +11,7 @@ class SimpleTriangle
 {
 	constexpr static uint32_t VulkanVersion = VK_API_VERSION_1_4;
 	constexpr static VkFormat ExpectedSwapchainFormat = VK_FORMAT_B8G8R8A8_SRGB;
+	constexpr static VkFormat DepthFormat = VK_FORMAT_D32_SFLOAT;
 public:
 	SimpleTriangle() = delete;
 	SimpleTriangle(const SimpleTriangle& instance) = delete;
@@ -31,6 +32,9 @@ private:
 private:
 	void ShowError(const std::string& errorMessage);
 	void Render();
+
+private:
+	void DestroySwapchain();
 private:
 	bool CreateWindow();
 	bool CreateInstance();
@@ -63,4 +67,8 @@ private:
 	uint32_t m_SwapchainWidth = 0;
 	uint32_t m_SwapchainHeight = 0;
 	VkFormat m_RequiredSwapchainFormat = VK_FORMAT_UNDEFINED;
+
+	VkImage m_DepthImage = VK_NULL_HANDLE;
+	VmaAllocation m_DepthImageAllocation = nullptr;
+	VkImageView m_DepthImageView = VK_NULL_HANDLE;
 };
