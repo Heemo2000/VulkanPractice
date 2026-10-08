@@ -7,6 +7,8 @@ add_executable(vulkanPractice
                "src/main.cpp"
                "src/SimpleTriangle.h"
                "src/SimpleTriangle.cpp"
+               "src/Utils.h"
+               "src/Utils.cpp"
                "src/vmaUsage.cpp"
                "src/volkUsage.cpp")
 
@@ -31,6 +33,19 @@ target_link_libraries(vulkanPractice PRIVATE
                       volk::volk
                       Vulkan::shaderc_combined
                       GPUOpen::VulkanMemoryAllocator)
+
+
+add_custom_command(TARGET vulkanPractice POST_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E echo "Copying shaders..."
+                   COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                   "${CMAKE_SOURCE_DIR}/shaders"
+                   "$<TARGET_FILE_DIR:vulkanPractice>/shaders"
+                   
+                   COMMAND ${CMAKE_COMMAND} -E echo "Copying SDL3.dll"
+                   COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                   "$<TARGET_FILE:SDL3::SDL3>"
+                   "$<TARGET_FILE_DIR:vulkanPractice>"
+                   )
 
 
 # set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT vulkanPractice)

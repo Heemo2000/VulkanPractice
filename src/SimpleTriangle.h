@@ -3,6 +3,7 @@
 
 #include <volk.h>
 #include <vk_mem_alloc.h>
+#include <shaderc/shaderc.hpp>
 
 #include<string>
 #include<vector>
@@ -30,7 +31,7 @@ private:
 								  void* pUserData);
 
 private:
-	void ShowError(const std::string& errorMessage);
+	void ShowError(const std::string& errorMessage) const;
 	void Render();
 
 private:
@@ -44,6 +45,9 @@ private:
 	bool CreateLogicalDevice(VkPhysicalDevice physicalDevice);
 	bool InitializeVMA();
 	bool CreateSwapchain(uint32_t width, uint32_t height);
+	bool CreateShaders();
+	VkShaderModule CreateShaderModule(const std::string& fileName, shaderc_shader_kind kind) const;
+	
 private:
 	uint32_t m_Width;
 	uint32_t m_Height;
@@ -71,4 +75,9 @@ private:
 	VkImage m_DepthImage = VK_NULL_HANDLE;
 	VmaAllocation m_DepthImageAllocation = nullptr;
 	VkImageView m_DepthImageView = VK_NULL_HANDLE;
+
+	VkShaderModule m_VertexShader = VK_NULL_HANDLE;
+	VkShaderModule m_FragmentShader = VK_NULL_HANDLE;
+
+	VkPipelineLayout m_PipelineLayout = VK_NULL_HANDLE;
 };

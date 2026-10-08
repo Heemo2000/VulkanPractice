@@ -2,6 +2,9 @@
 #include <SDL3/SDL.h>
 #include <iostream>
 #include <format>
+#include <fstream>
+#include <sstream>
+#include "Utils.h"
 
 SimpleTriangle::SimpleTriangle(uint32_t width, uint32_t height) : m_Width(width), m_Height(height)
 {
@@ -61,6 +64,12 @@ bool SimpleTriangle::Initialize()
 	if (!CreateSwapchain(m_Width, m_Height))
 	{
 		ShowError("Couldn't create a swapchain!!");
+		return false;
+	}
+
+	if (!CreateShaders())
+	{
+		ShowError("Failed to create shaders!!");
 		return false;
 	}
 
@@ -130,7 +139,7 @@ VkBool32 SimpleTriangle::DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT me
 	return VK_FALSE;
 }
 
-void SimpleTriangle::ShowError(const std::string& errorMessage)
+void SimpleTriangle::ShowError(const std::string& errorMessage) const
 {
 	SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", errorMessage.c_str(), m_Window);
 }
@@ -681,3 +690,68 @@ bool SimpleTriangle::CreateSwapchain(uint32_t width, uint32_t height)
 
 	return true;
 }
+
+bool SimpleTriangle::CreateShaders()
+{
+	if (m_VertexShader = CreateShaderModule("shader.vert", shaderc_vertex_shader); m_VertexShader == VK_NULL_HANDLE)
+	{
+		ShowError("Vertex shader does not get created!!");
+		return false;
+	}
+
+	if (m_FragmentShader = CreateShaderModule("shader.frag", shaderc_fragment_shader); m_FragmentShader == VK_NULL_HANDLE)
+	{
+		ShowError("Fragment shader does not get created!!");
+		return false;
+	}
+	
+
+	return true;
+}
+
+VkShaderModule SimpleTriangle::CreateShaderModule(const std::string& fileName, shaderc_shader_kind kind) const
+{
+	const std::string realPath = std::format("shaders/{0}", fileName);
+	const std::string src = ReadTextFile(realPath);
+	if (src.empty())
+	{
+		ShowError(std::format("Specified shader not found at file path {0} !", realPath));
+		return VK_NULL_HANDLE;
+	}
+
+	std::cout << "Compiling shader " << realPath << std::endl;
+	shaderc::Compiler compiler;
+	shaderc::CompileOptions options;
+	options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_4);
+	options.SetTargetSpirv(shaderc_spirv_version_1_6);
+	options.SetOptimizationLevel(shaderc_optimization_level_performance);
+
+	shaderc::CompilationResult result = compiler.CompileGlslToSpv(src, kind, fileName.c_str(), options);
+
+	if (result.GetCompilationStatus() != shaderc_compilation_status_success)
+	{
+		std::cerr << "Shader compilation error: " << result.GetErrorMessage() << std::endl;
+		return VK_NULL_HANDLE;
+	}
+
+	const size_t shaderSize = (result.cend() - result.cbegin()) * sizeof(uint32_t);
+
+	VkShaderModuleCreateInfo shaderCreateInfo
+	{
+		.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+		.codeSize = shaderSize,
+		.pCode = result.cbegin()
+	};
+
+	VkShaderModule shaderModule = VK_NULL_HANDLE;
+	if (vkCreateShaderModule(m_LogicalDevice, &shaderCreateInfo, nullptr, &shaderModule) != VK_SUCCESS)
+	{
+		ShowError(std::format("Creation of shader module {0} failed!!", fileName));
+		return VK_NULL_HANDLE;
+	}
+
+	std::cout << "Compilation successful." << std::endl;
+	return shaderModule;
+}
+
+
