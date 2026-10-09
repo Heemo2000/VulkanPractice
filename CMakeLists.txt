@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.26)
 project(VulkanPractice LANGUAGES CXX)
 find_package(Vulkan REQUIRED COMPONENTS shaderc_combined)
 
@@ -35,11 +35,14 @@ target_link_libraries(vulkanPractice PRIVATE
                       GPUOpen::VulkanMemoryAllocator)
 
 
-add_custom_command(TARGET vulkanPractice POST_BUILD
+add_custom_target(copy_shaders ALL
                    COMMAND ${CMAKE_COMMAND} -E echo "Copying shaders..."
-                   COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                   COMMAND ${CMAKE_COMMAND} -E copy_directory
                    "${CMAKE_SOURCE_DIR}/shaders"
                    "$<TARGET_FILE_DIR:vulkanPractice>/shaders"
+                   )
+
+add_custom_command(TARGET vulkanPractice POST_BUILD
                    
                    COMMAND ${CMAKE_COMMAND} -E echo "Copying SDL3.dll"
                    COMMAND ${CMAKE_COMMAND} -E copy_if_different

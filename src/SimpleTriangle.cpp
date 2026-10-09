@@ -2,8 +2,7 @@
 #include <SDL3/SDL.h>
 #include <iostream>
 #include <format>
-#include <fstream>
-#include <sstream>
+#include <filesystem>
 #include "Utils.h"
 
 SimpleTriangle::SimpleTriangle(uint32_t width, uint32_t height) : m_Width(width), m_Height(height)
@@ -14,25 +13,25 @@ bool SimpleTriangle::Initialize()
 {
 	if (!CreateWindow())
 	{
-		ShowError("Failed to initialize a window!!");
+		ShowError(m_Window,"Failed to initialize a window!!");
 		return false;
 	}
 
 	if (!CreateInstance())
 	{
-		ShowError("Error while creating an instance!!");
+		ShowError(m_Window,"Error while creating an instance!!");
 		return false;
 	}
 
 	if (!CreateSurface())
 	{
-		ShowError("Failed to create a surface!!");
+		ShowError(m_Window,"Failed to create a surface!!");
 		return false;
 	}
 
 	if (m_PhysicalDevice = FindPhysicalDevice(); m_PhysicalDevice == VK_NULL_HANDLE)
 	{
-		ShowError("Failed to find physical device");
+		ShowError(m_Window,"Failed to find physical device");
 		return false;
 	}
 
@@ -43,7 +42,7 @@ bool SimpleTriangle::Initialize()
 
 	if (!FindGraphicsQueueIndex())
 	{
-		ShowError("Failed to get graphics queue index!!");
+		ShowError(m_Window,"Failed to get graphics queue index!!");
 		return false;
 	}
 
@@ -51,25 +50,25 @@ bool SimpleTriangle::Initialize()
 
 	if (!CreateLogicalDevice(m_PhysicalDevice))
 	{
-		ShowError("Couldn't create a logical device for selected GPU!!");
+		ShowError(m_Window,"Couldn't create a logical device for selected GPU!!");
 		return false;
 	}
 
 	if (!InitializeVMA())
 	{
-		ShowError("Failed to initialize VMA!!");
+		ShowError(m_Window,"Failed to initialize VMA!!");
 		return false;
 	}
 
 	if (!CreateSwapchain(m_Width, m_Height))
 	{
-		ShowError("Couldn't create a swapchain!!");
+		ShowError(m_Window,"Couldn't create a swapchain!!");
 		return false;
 	}
 
 	if (!CreateShaders())
 	{
-		ShowError("Failed to create shaders!!");
+		ShowError(m_Window,"Failed to create shaders!!");
 		return false;
 	}
 
@@ -139,11 +138,6 @@ VkBool32 SimpleTriangle::DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT me
 	return VK_FALSE;
 }
 
-void SimpleTriangle::ShowError(const std::string& errorMessage) const
-{
-	SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", errorMessage.c_str(), m_Window);
-}
-
 void SimpleTriangle::Render()
 {
 
@@ -184,7 +178,7 @@ bool SimpleTriangle::CreateWindow()
 	//First, we initialize SDL with video support.
 	if (!SDL_Init(SDL_INIT_VIDEO))
 	{
-		ShowError("Failed to initialize SDL!!");
+		ShowError(m_Window,"Failed to initialize SDL!!");
 		return false;
 	}
 
@@ -192,7 +186,7 @@ bool SimpleTriangle::CreateWindow()
 	m_Window = SDL_CreateWindow("Simple Triangle", m_Width, m_Height, SDL_WINDOW_RESIZABLE | SDL_WINDOW_VULKAN);
 	if (m_Window == nullptr)
 	{
-		ShowError("Can't create a window!!");
+		ShowError(m_Window,"Can't create a window!!");
 		return false;
 	}
 	return true;
@@ -203,7 +197,7 @@ bool SimpleTriangle::CreateInstance()
 	//First initialize the Volk Library.
 	if (volkInitialize() != VK_SUCCESS)
 	{
-		ShowError("Failed to initialize Vulkan!!");
+		ShowError(m_Window,"Failed to initialize Vulkan!!");
 		return false;
 	}
 	
@@ -286,7 +280,7 @@ bool SimpleTriangle::CreateInstance()
 
 	if (vkCreateInstance(&instanceCreateInfo, nullptr, &m_Instance) != VK_SUCCESS)
 	{
-		ShowError("Failed to create an instance!!");
+		ShowError(m_Window,"Failed to create an instance!!");
 		return false;
 	}
 
@@ -434,17 +428,17 @@ bool SimpleTriangle::CreateLogicalDevice(VkPhysicalDevice physicalDevice)
 	{
 		if (!vk13Features.dynamicRendering)
 		{
-			ShowError("Your GPU doesn't support dynamic rendering");
+			ShowError(m_Window,"Your GPU doesn't support dynamic rendering");
 		}
 
 		if (!vk13Features.synchronization2)
 		{
-			ShowError("Your GPU doesn't support Synchronization2");
+			ShowError(m_Window,"Your GPU doesn't support Synchronization2");
 		}
 
 		if (!vk12Features.timelineSemaphore)
 		{
-			ShowError("Your GPU doesn't support Timeline Semaphores");
+			ShowError(m_Window,"Your GPU doesn't support Timeline Semaphores");
 		}
 
 		return false;
@@ -515,7 +509,7 @@ bool SimpleTriangle::CreateLogicalDevice(VkPhysicalDevice physicalDevice)
 
 	if (m_GraphicsQueue == VK_NULL_HANDLE)
 	{
-		ShowError("Couldn't get the graphics queue");
+		ShowError(m_Window,"Couldn't get the graphics queue");
 		return false;
 	}
 
@@ -540,7 +534,7 @@ bool SimpleTriangle::InitializeVMA()
 	
 	if (vmaCreateAllocator(&allocatorCreateInfo, &m_Allocator) != VK_SUCCESS)
 	{
-		ShowError("Could not create VMA allocator!!");
+		ShowError(m_Window,"Could not create VMA allocator!!");
 		return false;
 	}
 	return true;
@@ -555,7 +549,7 @@ bool SimpleTriangle::CreateSwapchain(uint32_t width, uint32_t height)
 	VkSurfaceCapabilitiesKHR surfaceCaps{};
 	if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_PhysicalDevice, m_Surface, &surfaceCaps) != VK_SUCCESS)
 	{
-		ShowError("Couldn't get surface capabilities");
+		ShowError(m_Window,"Couldn't get surface capabilities");
 		return false;
 	}
 
@@ -619,7 +613,7 @@ bool SimpleTriangle::CreateSwapchain(uint32_t width, uint32_t height)
 
 		if (vkCreateImageView(m_LogicalDevice, &imageViewCreateInfo, nullptr, &m_SwapchainImageViews[i]) != VK_SUCCESS)
 		{
-			ShowError(std::format("Not able to create image view {0}", i));
+			ShowError(m_Window,std::format("Not able to create image view {0}", i));
 			return false;
 		}
 	}
@@ -637,7 +631,7 @@ bool SimpleTriangle::CreateSwapchain(uint32_t width, uint32_t height)
 
 		if (vkCreateSemaphore(m_LogicalDevice, &semaphoreCreateInfo, nullptr, &semaphore) != VK_SUCCESS)
 		{
-			ShowError(std::format("Not able to create render complete semaphore {0}", index));
+			ShowError(m_Window,std::format("Not able to create render complete semaphore {0}", index));
 			return false;
 		}
 		index++;
@@ -668,7 +662,7 @@ bool SimpleTriangle::CreateSwapchain(uint32_t width, uint32_t height)
 
 	if (vmaCreateImage(m_Allocator, &depthImageCreateInfo, &allocInfo, &m_DepthImage, &m_DepthImageAllocation, nullptr) != VK_SUCCESS)
 	{
-		ShowError("Unable to create depth image!!");
+		ShowError(m_Window,"Unable to create depth image!!");
 		return false;
 	}
 
@@ -684,7 +678,7 @@ bool SimpleTriangle::CreateSwapchain(uint32_t width, uint32_t height)
 
 	if (vkCreateImageView(m_LogicalDevice, &depthImageViewCreateInfo, nullptr, &m_DepthImageView) != VK_SUCCESS)
 	{
-		ShowError("Unable to create depth image view!!");
+		ShowError(m_Window,"Unable to create depth image view!!");
 		return false;
 	}
 
@@ -695,13 +689,13 @@ bool SimpleTriangle::CreateShaders()
 {
 	if (m_VertexShader = CreateShaderModule("shader.vert", shaderc_vertex_shader); m_VertexShader == VK_NULL_HANDLE)
 	{
-		ShowError("Vertex shader does not get created!!");
+		ShowError(m_Window,"Vertex shader does not get created!!");
 		return false;
 	}
 
 	if (m_FragmentShader = CreateShaderModule("shader.frag", shaderc_fragment_shader); m_FragmentShader == VK_NULL_HANDLE)
 	{
-		ShowError("Fragment shader does not get created!!");
+		ShowError(m_Window,"Fragment shader does not get created!!");
 		return false;
 	}
 	
@@ -711,11 +705,16 @@ bool SimpleTriangle::CreateShaders()
 
 VkShaderModule SimpleTriangle::CreateShaderModule(const std::string& fileName, shaderc_shader_kind kind) const
 {
-	const std::string realPath = std::format("shaders/{0}", fileName);
+	std::string buildTypePath = "Release";
+	#if !NDEBUG
+		buildTypePath = "Debug";
+	#endif
+
+	const std::string realPath = std::format("{0}\\{1}\\shaders\\{2}", std::filesystem::current_path().string(), buildTypePath, fileName);
 	const std::string src = ReadTextFile(realPath);
 	if (src.empty())
 	{
-		ShowError(std::format("Specified shader not found at file path {0} !", realPath));
+		ShowError(m_Window,std::format("Specified shader not found at file path {0} !", realPath));
 		return VK_NULL_HANDLE;
 	}
 
@@ -746,12 +745,81 @@ VkShaderModule SimpleTriangle::CreateShaderModule(const std::string& fileName, s
 	VkShaderModule shaderModule = VK_NULL_HANDLE;
 	if (vkCreateShaderModule(m_LogicalDevice, &shaderCreateInfo, nullptr, &shaderModule) != VK_SUCCESS)
 	{
-		ShowError(std::format("Creation of shader module {0} failed!!", fileName));
+		ShowError(m_Window,std::format("Creation of shader module {0} failed!!", fileName));
 		return VK_NULL_HANDLE;
 	}
 
 	std::cout << "Compilation successful." << std::endl;
 	return shaderModule;
+}
+
+VkPipeline SimpleTriangle::CreateGraphicsPipeline()
+{
+	VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo
+	{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+		.setLayoutCount = 0,
+		.pushConstantRangeCount = 0
+	};
+
+	if (vkCreatePipelineLayout(m_LogicalDevice, &pipelineLayoutCreateInfo, nullptr, &m_PipelineLayout) != VK_SUCCESS)
+	{
+		ShowError(m_Window, "Unable to create pipeline layout!!");
+		return VK_NULL_HANDLE;
+	}
+
+	const char* entryPoint = "main";
+	std::vector<VkPipelineShaderStageCreateInfo> shaderStages;
+
+	shaderStages.push_back(
+		{
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			.stage = VK_SHADER_STAGE_VERTEX_BIT,
+			.module = m_VertexShader,
+			.pName = entryPoint
+		});
+
+	shaderStages.push_back(
+		{
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+			.module = m_FragmentShader,
+			.pName = entryPoint
+		});
+
+	//vertex pulling
+	VkPipelineVertexInputStateCreateInfo vertexInputInfo
+	{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO
+	};
+
+	//input assembly: We will be drawing triangle lists.
+	VkPipelineInputAssemblyStateCreateInfo inputAssemblyInfo
+	{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
+	};
+
+	VkPipelineDepthStencilStateCreateInfo depthStencilInfo
+	{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+		.depthTestEnable = VK_TRUE,
+		.depthWriteEnable = VK_TRUE,
+		.depthCompareOp = VK_COMPARE_OP_LESS,
+		.stencilTestEnable = VK_FALSE
+	};
+
+	VkPipelineViewportStateCreateInfo viewportInfo
+	{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+		.viewportCount = 1,
+		.pViewports = VK_NULL_HANDLE,
+		.scissorCount = 1,
+		.pScissors = VK_NULL_HANDLE
+	};
+
+
+	return VK_NULL_HANDLE;
 }
 
 

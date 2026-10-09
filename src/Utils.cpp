@@ -15,3 +15,8 @@ std::string ReadTextFile(const std::string& filePath)
 	}
 	return std::string();
 }
+
+void ShowError(SDL_Window* window, const std::string& errorMessage)
+{
+	SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", errorMessage.c_str(), window);
+}

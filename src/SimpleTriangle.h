@@ -1,3 +1,4 @@
+#pragma once
 #define VK_NO_PROTOTYPES
 #include <SDL3/SDL_vulkan.h>
 
@@ -31,7 +32,6 @@ private:
 								  void* pUserData);
 
 private:
-	void ShowError(const std::string& errorMessage) const;
 	void Render();
 
 private:
@@ -47,6 +47,7 @@ private:
 	bool CreateSwapchain(uint32_t width, uint32_t height);
 	bool CreateShaders();
 	VkShaderModule CreateShaderModule(const std::string& fileName, shaderc_shader_kind kind) const;
+	VkPipeline CreateGraphicsPipeline();
 	
 private:
 	uint32_t m_Width;
@@ -80,4 +81,6 @@ private:
 	VkShaderModule m_FragmentShader = VK_NULL_HANDLE;
 
 	VkPipelineLayout m_PipelineLayout = VK_NULL_HANDLE;
+	VkPipeline m_Pipeline = VK_NULL_HANDLE;
+
 };
