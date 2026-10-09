@@ -72,6 +72,12 @@ bool SimpleTriangle::Initialize()
 		return false;
 	}
 
+	if (m_Pipeline = CreateGraphicsPipeline(); m_Pipeline == VK_NULL_HANDLE)
+	{
+		ShowError(m_Window, "Failed to create graphics pipeline");
+		return false;
+	}
+
 	return true;
 }
 
@@ -104,6 +110,27 @@ void SimpleTriangle::Shutdown()
 {
 	vkDeviceWaitIdle(m_LogicalDevice);
 
+	if (m_PipelineLayout != VK_NULL_HANDLE)
+	{
+		vkDestroyPipelineLayout(m_LogicalDevice, m_PipelineLayout, nullptr);
+	}
+
+	if (m_Pipeline != VK_NULL_HANDLE)
+	{
+		vkDestroyPipeline(m_LogicalDevice, m_Pipeline, nullptr);
+	}
+
+	if (m_FragmentShader != VK_NULL_HANDLE)
+	{
+		vkDestroyShaderModule(m_LogicalDevice, m_FragmentShader, nullptr);
+	}
+
+	if (m_VertexShader != VK_NULL_HANDLE)
+	{
+		vkDestroyShaderModule(m_LogicalDevice, m_VertexShader, nullptr);
+	}
+
+	
 	DestroySwapchain();
 
 	if (m_Allocator != nullptr)
@@ -710,15 +737,16 @@ VkShaderModule SimpleTriangle::CreateShaderModule(const std::string& fileName, s
 		buildTypePath = "Debug";
 	#endif
 
-	const std::string realPath = std::format("{0}\\{1}\\shaders\\{2}", std::filesystem::current_path().string(), buildTypePath, fileName);
-	const std::string src = ReadTextFile(realPath);
+    auto realPath = std::filesystem::current_path() / buildTypePath / "shaders" / fileName;
+	const std::string realPathStr = realPath.string();
+	const std::string src = ReadTextFile(realPathStr);
 	if (src.empty())
 	{
-		ShowError(m_Window,std::format("Specified shader not found at file path {0} !", realPath));
+		ShowError(m_Window,std::format("Specified shader not found at file path {0} !", realPathStr));
 		return VK_NULL_HANDLE;
 	}
 
-	std::cout << "Compiling shader " << realPath << std::endl;
+	std::cout << "Compiling shader " << realPathStr << std::endl;
 	shaderc::Compiler compiler;
 	shaderc::CompileOptions options;
 	options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_4);
@@ -818,8 +846,84 @@ VkPipeline SimpleTriangle::CreateGraphicsPipeline()
 		.pScissors = VK_NULL_HANDLE
 	};
 
+	VkPipelineRasterizationStateCreateInfo rasterizationInfo
+	{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+		.polygonMode = VK_POLYGON_MODE_FILL,
+		.cullMode = VK_CULL_MODE_BACK_BIT,
+		.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+		.lineWidth = 1.0f
+	};
 
-	return VK_NULL_HANDLE;
+
+	//Here, we are not using multisampling for now.
+	VkPipelineMultisampleStateCreateInfo multisampleInfo
+	{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT
+	};
+
+	//We will disable alpha blending for now, still need attachment info and write mask.
+	VkPipelineColorBlendAttachmentState attachState
+	{
+		.blendEnable = VK_FALSE,
+		.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT |
+						  VK_COLOR_COMPONENT_A_BIT
+	};
+
+	VkPipelineColorBlendStateCreateInfo blendInfo
+	{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+		.attachmentCount = 1,
+		.pAttachments = &attachState
+	};
+
+	std::vector<VkDynamicState> dynamicState
+	{
+		VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR
+	};
+
+	VkPipelineDynamicStateCreateInfo dynamicStateInfo
+	{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+		.dynamicStateCount = static_cast<uint32_t>(dynamicState.size()),
+		.pDynamicStates = dynamicState.data()
+	};
+
+	VkPipelineRenderingCreateInfo renderInfo
+	{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+		.colorAttachmentCount = 1,
+		.pColorAttachmentFormats = &m_RequiredSwapchainFormat,
+		.depthAttachmentFormat = DepthFormat
+	};
+
+	VkGraphicsPipelineCreateInfo pipelineCreateInfo
+	{
+		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+		.pNext = &renderInfo,
+		.stageCount = static_cast<uint32_t>(shaderStages.size()),
+		.pStages = shaderStages.data(),
+		.pVertexInputState = &vertexInputInfo,
+		.pInputAssemblyState = &inputAssemblyInfo,
+		.pViewportState = &viewportInfo,
+		.pRasterizationState = &rasterizationInfo,
+		.pMultisampleState = &multisampleInfo,
+		.pDepthStencilState = &depthStencilInfo,
+		.pColorBlendState = &blendInfo,
+		.pDynamicState = &dynamicStateInfo,
+		.layout = m_PipelineLayout,
+		.renderPass = VK_NULL_HANDLE
+	};
+
+	VkPipeline pipeline;
+	if (vkCreateGraphicsPipelines(m_LogicalDevice, nullptr, 1, &pipelineCreateInfo, nullptr, &pipeline) != VK_SUCCESS)
+	{
+		ShowError(m_Window, "Pipeline creation failed!!");
+		return VK_NULL_HANDLE;
+	}
+
+	return pipeline;
 }
 
 
