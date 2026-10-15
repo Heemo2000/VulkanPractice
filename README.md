@@ -26,4 +26,5 @@ in my journey.
     <li>Clone the repository at your desired location in the computer.</li>
     <li>At the desired location, run this command <code>cmake -B build -S .</code> <br/>This will create build folder at the desired location.</li>
     <li>Open the build folder and click on VulkanPractice.sln</li>
+    <li>Now you can run the application in Release and Debug mode.</li>
 </ol>
