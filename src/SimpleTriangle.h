@@ -8,12 +8,22 @@
 
 #include<string>
 #include<vector>
+#include<array>
+
+struct FrameResources
+{
+	VkCommandPool CommandPool = VK_NULL_HANDLE;
+	VkCommandBuffer CommandBuffer = VK_NULL_HANDLE;
+	VkSemaphore ImageAcquiredSemaphore = VK_NULL_HANDLE;
+};
 
 class SimpleTriangle
 {
 	constexpr static uint32_t VulkanVersion = VK_API_VERSION_1_4;
 	constexpr static VkFormat ExpectedSwapchainFormat = VK_FORMAT_B8G8R8A8_SRGB;
 	constexpr static VkFormat DepthFormat = VK_FORMAT_D32_SFLOAT;
+	constexpr static uint32_t MaxFramesInFlight = 3;
+
 public:
 	SimpleTriangle() = delete;
 	SimpleTriangle(const SimpleTriangle& instance) = delete;
@@ -48,7 +58,9 @@ private:
 	bool CreateShaders();
 	VkShaderModule CreateShaderModule(const std::string& fileName, shaderc_shader_kind kind) const;
 	VkPipeline CreateGraphicsPipeline();
-	
+	bool CreateSyncResources();
+	bool CreateCommandBuffers();
+
 private:
 	uint32_t m_Width;
 	uint32_t m_Height;
@@ -82,5 +94,11 @@ private:
 
 	VkPipelineLayout m_PipelineLayout = VK_NULL_HANDLE;
 	VkPipeline m_Pipeline = VK_NULL_HANDLE;
+
+	VkSemaphore m_TimelineSemaphore = VK_NULL_HANDLE;
+	std::array<FrameResources, MaxFramesInFlight> m_FrameResources;
+
+	uint32_t m_FrameIndex = 0;
+	uint64_t m_NextSignalValue = MaxFramesInFlight + 1;
 
 };
